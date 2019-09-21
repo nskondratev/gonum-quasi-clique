@@ -56,7 +56,8 @@ func main() {
 		EdgeConstructor: func(n1, n2 graph.Node) graph.Edge {
 			return simple.Edge{F: n1, T: n2}
 		},
-		SolveMode:  dda.OneSolution, // You can also specify dda.AllSolutions to get all maximal cliques. But it will be slower
+		// You can also specify dda.AllSolutions to get all maximal quasi-cliques
+		SolveMode:  dda.OneSolution,
 		YQCKSolver: glpk.Solve,
 	}
 
