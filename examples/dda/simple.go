@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/simple"
 
 	"github.com/nskondratev/gonum-quasi-clique/dda"
@@ -31,15 +30,9 @@ func main() {
 	g.SetEdge(simple.Edge{F: simple.Node(4), T: simple.Node(5)})
 
 	// Set up DDA options
-	ddaOpts := dda.DDAOpts{
+	ddaOpts := dda.Opts{
 		InputGraph: g,
 		Gamma:      0.5,
-		GraphConstructor: func() dda.GraphBuilder {
-			return simple.NewUndirectedGraph()
-		},
-		EdgeConstructor: func(n1, n2 graph.Node) graph.Edge {
-			return simple.Edge{F: n1, T: n2}
-		},
 		SolveMode:  dda.OneSolution, // You can also specify dda.AllSolutions to get all maximal cliques. But it will be slower
 		YQCKSolver: glpk.Solve,
 	}

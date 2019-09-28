@@ -33,15 +33,9 @@ func TestDDA(t *testing.T) {
 
 	for i, c := range cases {
 		_, err := osutil.CaptureWithCGo(func() {
-			ddaOpts := DDAOpts{
+			ddaOpts := Opts{
 				InputGraph: g,
 				Gamma:      c.gamma,
-				GraphConstructor: func() GraphBuilder {
-					return simple.NewUndirectedGraph()
-				},
-				EdgeConstructor: func(n1, n2 graph.Node) graph.Edge {
-					return simple.Edge{F: n1, T: n2}
-				},
 				SolveMode:  c.solveMode,
 				YQCKSolver: glpk.Solve,
 			}
@@ -107,15 +101,9 @@ func BenchmarkDDA_glpk(b *testing.B) {
 					b.StopTimer()
 					_, err := osutil.CaptureWithCGo(func() {
 						b.StartTimer()
-						_, _, err := DDA(DDAOpts{
+						_, _, err := DDA(Opts{
 							InputGraph: g,
 							Gamma:      gamma,
-							GraphConstructor: func() GraphBuilder {
-								return simple.NewUndirectedGraph()
-							},
-							EdgeConstructor: func(n1, n2 graph.Node) graph.Edge {
-								return simple.Edge{F: n1, T: n2}
-							},
 							SolveMode:  c.solveMode,
 							YQCKSolver: glpk.Solve,
 						})
@@ -148,11 +136,10 @@ func getGraphFromFile(filename string) func() (graph.Undirected, error) {
 	}
 }
 
-func nodesEqual(g graph.Graph, expected []int) bool {
+func nodesEqual(received graph.Nodes, expected []int) bool {
 	var nodes []int
-	it := g.Nodes()
-	for it.Next() {
-		nodes = append(nodes, int(it.Node().ID()))
+	for received.Next() {
+		nodes = append(nodes, int(received.Node().ID()))
 	}
 	sort.Ints(nodes)
 	return reflect.DeepEqual(nodes, expected)
