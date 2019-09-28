@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"runtime"
+	"strconv"
 
 	"github.com/lukpank/go-glpk/glpk"
 	"gonum.org/v1/gonum/graph"
@@ -33,17 +34,20 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 	nodesCount := nodes.Len()
 
 	lp.AddCols(nodesCount)
+	lp.AddRows(nodesCount + 1)
+
 	ind := make([]int32, nodesCount+1)
 	ones := make([]float64, nodesCount+1)
-	for i := 0; i < nodesCount; i++ {
-		lp.SetColName(i+1, fmt.Sprintf("x%d", i+1))
+
+	i := 0
+	for nodes.Next() {
+		lp.SetColName(i+1, nodeIDToColName(nodes.Node().ID()))
 		lp.SetColKind(i+1, glpk.BV)
 		lp.SetObjCoef(i+1, 1)
 		ind[i+1] = int32(i + 1)
 		ones[i+1] = 1.0
+		i++
 	}
-
-	lp.AddRows(nodesCount + 1)
 
 	// Add constraints for each vertex
 	for i := 0; i < nodesCount; i++ {
@@ -55,7 +59,7 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 			switch {
 			case i == j:
 				matVal = float64(-k)
-			case in.HasEdgeBetween(int64(i), int64(j)):
+			case in.HasEdgeBetween(colNameToNodeID(lp.ColName(i+1)), colNameToNodeID(lp.ColName(j+1))):
 				matVal = 1.0
 			}
 			coefs[j+1] = matVal
@@ -83,39 +87,30 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 		solutionNodesCount = int64(lp.MipObjVal())
 
 		prevSolutionSize = solutionNodesCount
-		//fmt.Printf("%s = %d", lp.ObjName(), solutionNodesCount)
 		qcI := 0
 		qcNodes := make([]graph.Node, solutionNodesCount)
 		for i := 0; i < lp.NumCols(); i++ {
-			//fmt.Printf("; %s = %g", lp.ColName(i+1), lp.MipColVal(i+1))
 			if isOne(lp.MipColVal(i + 1)) {
-				qcNodes[qcI] = in.Node(int64(i))
+				qcNodes[qcI] = in.Node(colNameToNodeID(lp.ColName(i + 1)))
 				prevSolution = append(prevSolution, i)
 				qcI++
 			}
 		}
-		//fmt.Println()
 		quasiClique = iterator.NewOrderedNodes(qcNodes)
 		quasiCliques = append(quasiCliques, quasiClique)
 
 		// Find other solutions if necessary
 		if allSolutions {
-			//log.Printf("Find all solutions. Prev solution size: %d, prev solution: %v\n", prevSolutionSize, prevSolution)
 			for prevSolutionSize == solutionNodesCount && lp.MipStatus() == glpk.OPT {
 				// Exclude previous solution
 				lp.AddRows(1)
 				coefs := make([]float64, nodesCount+1)
-				//log.Printf("coefs: %v\n", coefs)
 				for _, i := range prevSolution {
 					coefs[i+1] = 1.0
 				}
-				//log.Printf("coefs: %v\n", coefs)
 				lp.SetRowBnds(lp.NumRows(), glpk.UP, 0.0, float64(prevSolutionSize)-0.5)
 				lp.SetMatRow(lp.NumRows(), ind, coefs)
 				lp.SetRowName(lp.NumRows(), fmt.Sprintf("exclude_prev_solution_%d", lp.NumRows()))
-
-				//_ = lp.WriteLP(nil, "lp.txt")
-				//_ = lp.WriteMPS(glpk.MPS_FILE, nil, "mps.txt")
 
 				// Solve again
 				if err := lp.Intopt(iocp); err != nil {
@@ -123,25 +118,20 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 					return nil, 0, nil
 				}
 
-				//log.Printf("New solutuon is found. Status: %s\n", solStatToString(lp.MipStatus()))
-
 				// If solution found and its size is equal to max solution, store it
 				if lp.MipStatus() == glpk.OPT {
 					prevSolutionSize = int64(lp.MipObjVal())
-					//log.Printf("New solution size: %d\n", prevSolutionSize)
 					prevSolution = make([]int, 0)
 					if prevSolutionSize == solutionNodesCount {
 						qcI := 0
 						qcNodes := make([]graph.Node, solutionNodesCount)
 						for i := 0; i < lp.NumCols(); i++ {
-							//fmt.Printf("; %s = %g", lp.ColName(i+1), lp.MipColVal(i+1))
 							if isOne(lp.MipColVal(i + 1)) {
-								qcNodes[qcI] = in.Node(int64(i))
+								qcNodes[qcI] = in.Node(colNameToNodeID(lp.ColName(i + 1)))
 								prevSolution = append(prevSolution, i)
 								qcI++
 							}
 						}
-						//fmt.Println()
 						quasiClique = iterator.NewOrderedNodes(qcNodes)
 						quasiCliques = append(quasiCliques, quasiClique)
 					}
@@ -153,25 +143,15 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 	return quasiCliques, solutionNodesCount, nil
 }
 
-func isOne(val float64) bool {
-	return 1.0-eps <= val && val <= 1.0+eps
+func nodeIDToColName(nodeID int64) string {
+	return "x" + strconv.FormatInt(nodeID, 10)
 }
 
-func solStatToString(solStat glpk.SolStat) string {
-	switch solStat {
-	case glpk.UNDEF:
-		return "UNDEF"
-	case glpk.UNBND:
-		return "UNBND"
-	case glpk.OPT:
-		return "OPT"
-	case glpk.FEAS:
-		return "FEAS"
-	case glpk.INFEAS:
-		return "INFEAS"
-	case glpk.NOFEAS:
-		return "NOFEAS"
-	default:
-		return "UNKNOWN"
-	}
+func colNameToNodeID(colName string) int64 {
+	nodeID, _ := strconv.ParseInt(colName[1:], 10, 64)
+	return nodeID
+}
+
+func isOne(val float64) bool {
+	return 1.0-eps <= val && val <= 1.0+eps
 }

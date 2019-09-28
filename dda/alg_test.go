@@ -51,10 +51,8 @@ func TestDDA(t *testing.T) {
 				t.Errorf("[%d] Quasi-cliques count mismatch. Expected %d, got %d", i, len(c.expectedQC), len(quasiCliques))
 			}
 
-			for i := 0; i < len(quasiCliques); i++ {
-				if !nodesEqual(quasiCliques[i], c.expectedQC[i]) {
-					t.Errorf("[%d] quasi-cliqes mismatch", i)
-				}
+			if !quasiCliquesAreEqual(quasiCliques, c.expectedQC) {
+				t.Errorf("[%d] quasi-cliqes mismatch.", i)
 			}
 		})
 		if err != nil {
@@ -136,11 +134,20 @@ func getGraphFromFile(filename string) func() (graph.Undirected, error) {
 	}
 }
 
-func nodesEqual(received graph.Nodes, expected []int) bool {
-	var nodes []int
-	for received.Next() {
-		nodes = append(nodes, int(received.Node().ID()))
+func quasiCliquesAreEqual(received []graph.Nodes, expected [][]int) bool {
+OUTER:
+	for _, it := range received {
+		var nodes []int
+		for it.Next() {
+			nodes = append(nodes, int(it.Node().ID()))
+		}
+		sort.Ints(nodes)
+		for _, e := range expected {
+			if reflect.DeepEqual(nodes, e) {
+				continue OUTER
+			}
+		}
+		return false
 	}
-	sort.Ints(nodes)
-	return reflect.DeepEqual(nodes, expected)
+	return true
 }
