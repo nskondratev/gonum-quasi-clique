@@ -5,7 +5,6 @@ import (
 	"log"
 	"math"
 	"runtime"
-	"strconv"
 
 	"github.com/lukpank/go-glpk/glpk"
 	"gonum.org/v1/gonum/graph"
@@ -33,6 +32,7 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 	nodes := in.Nodes()
 	nodesCount := nodes.Len()
 
+	colToNodeID := make(map[int]int64, nodesCount)
 	lp.AddCols(nodesCount)
 	lp.AddRows(nodesCount + 1)
 
@@ -41,7 +41,8 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 
 	i := 0
 	for nodes.Next() {
-		lp.SetColName(i+1, nodeIDToColName(nodes.Node().ID()))
+		colToNodeID[i+1] = nodes.Node().ID()
+		lp.SetColName(i+1, fmt.Sprintf("x_%d", i))
 		lp.SetColKind(i+1, glpk.BV)
 		lp.SetObjCoef(i+1, 1)
 		ind[i+1] = int32(i + 1)
@@ -59,7 +60,7 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 			switch {
 			case i == j:
 				matVal = float64(-k)
-			case in.HasEdgeBetween(colNameToNodeID(lp.ColName(i+1)), colNameToNodeID(lp.ColName(j+1))):
+			case in.HasEdgeBetween(colToNodeID[i+1], colToNodeID[j+1]):
 				matVal = 1.0
 			}
 			coefs[j+1] = matVal
@@ -91,7 +92,7 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 		qcNodes := make([]graph.Node, solutionNodesCount)
 		for i := 0; i < lp.NumCols(); i++ {
 			if isOne(lp.MipColVal(i + 1)) {
-				qcNodes[qcI] = in.Node(colNameToNodeID(lp.ColName(i + 1)))
+				qcNodes[qcI] = in.Node(colToNodeID[i+1])
 				prevSolution = append(prevSolution, i)
 				qcI++
 			}
@@ -127,7 +128,7 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 						qcNodes := make([]graph.Node, solutionNodesCount)
 						for i := 0; i < lp.NumCols(); i++ {
 							if isOne(lp.MipColVal(i + 1)) {
-								qcNodes[qcI] = in.Node(colNameToNodeID(lp.ColName(i + 1)))
+								qcNodes[qcI] = in.Node(colToNodeID[i+1])
 								prevSolution = append(prevSolution, i)
 								qcI++
 							}
@@ -141,15 +142,6 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 	}
 
 	return quasiCliques, solutionNodesCount, nil
-}
-
-func nodeIDToColName(nodeID int64) string {
-	return "x" + strconv.FormatInt(nodeID, 10)
-}
-
-func colNameToNodeID(colName string) int64 {
-	nodeID, _ := strconv.ParseInt(colName[1:], 10, 64)
-	return nodeID
 }
 
 func isOne(val float64) bool {
