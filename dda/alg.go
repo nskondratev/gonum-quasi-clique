@@ -13,16 +13,11 @@ import (
 // GammaQCkSolver describes the function for solving gamma-QC(k) mixed-integer problem
 type GammaQCkSolver func(
 	in graph.Undirected,
+	nodes []graph.Node,
 	gamma float64,
 	k int64,
 	allSolutions bool,
 ) (qcNodes []graph.Nodes, qcSize int64, err error)
-
-type GraphBuilder interface {
-	graph.NodeAdder
-	graph.EdgeAdder
-	graph.Graph
-}
 
 // SolveMode describes how many solutions will be found by DDA
 type SolveMode bool
@@ -67,7 +62,13 @@ func DDA(opts Opts) ([]graph.Nodes, int64, error) {
 	k := int64(degeneracy) + 1
 	for currentMax < int64(math.Floor(float64(k)/opts.Gamma))+1 {
 		k--
-		qcNodes, qcSize, err := opts.YQCKSolver(opts.InputGraph, opts.Gamma, k, bool(opts.SolveMode))
+		qcNodes, qcSize, err := opts.YQCKSolver(
+			opts.InputGraph,
+			graph.NodesOf(opts.InputGraph.Nodes()),
+			opts.Gamma,
+			k,
+			bool(opts.SolveMode),
+		)
 		if err != nil {
 			log.Printf("Error while solving y-QC(k) problem: %s\n", err.Error())
 		}

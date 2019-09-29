@@ -15,7 +15,13 @@ const (
 	eps = 1e-6
 )
 
-func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]graph.Nodes, int64, error) {
+func Solve(
+	in graph.Undirected,
+	nodes []graph.Node,
+	gamma float64,
+	k int64,
+	allSolutions bool,
+) ([]graph.Nodes, int64, error) {
 	var quasiClique graph.Nodes
 	var solutionNodesCount int64
 
@@ -29,8 +35,7 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 	lp.SetObjName("Number of vertices")
 	lp.SetObjDir(glpk.MAX)
 
-	nodes := in.Nodes()
-	nodesCount := nodes.Len()
+	nodesCount := len(nodes)
 
 	colToNodeID := make(map[int]int64, nodesCount)
 	lp.AddCols(nodesCount)
@@ -39,9 +44,8 @@ func Solve(in graph.Undirected, gamma float64, k int64, allSolutions bool) ([]gr
 	ind := make([]int32, nodesCount+1)
 	ones := make([]float64, nodesCount+1)
 
-	i := 0
-	for nodes.Next() {
-		colToNodeID[i+1] = nodes.Node().ID()
+	for i, n := range nodes {
+		colToNodeID[i+1] = n.ID()
 		lp.SetColName(i+1, fmt.Sprintf("x_%d", i))
 		lp.SetColKind(i+1, glpk.BV)
 		lp.SetObjCoef(i+1, 1)
