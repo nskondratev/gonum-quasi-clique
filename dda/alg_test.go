@@ -1,6 +1,7 @@
 package dda
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -17,6 +18,12 @@ import (
 	"github.com/nskondratev/gonum-quasi-clique/dda/solvers/glpk"
 )
 
+var allSolutions bool
+
+func init() {
+	flag.BoolVar(&allSolutions, "all-solutions", false, "Set to find all maximal quasi-cliques")
+}
+
 func TestDDA(t *testing.T) {
 	g, _ := getGraphFromFile(path.Join("..", "testdata", "small.dot"))()
 
@@ -27,7 +34,7 @@ func TestDDA(t *testing.T) {
 		expectedQCSize int64
 	}{
 		{1.0, OneSolution, [][]int{{0, 1, 3, 4}}, 4},
-		{0.5, OneSolution, [][]int{{0, 1, 3, 4, 5}}, 5},
+		{0.5, OneSolution, [][]int{}, 5},
 		{0.5, AllSolutions, [][]int{{0, 1, 3, 4, 5}, {0, 1, 2, 3, 4}}, 5},
 	}
 
@@ -47,11 +54,11 @@ func TestDDA(t *testing.T) {
 				t.Errorf("[%d] Quasi-clique size mismatch. Expected %d, got %d", i, c.expectedQCSize, qcSize)
 			}
 
-			if len(quasiCliques) != len(c.expectedQC) {
+			if len(c.expectedQC) > 0 && len(quasiCliques) != len(c.expectedQC) {
 				t.Errorf("[%d] Quasi-cliques count mismatch. Expected %d, got %d", i, len(c.expectedQC), len(quasiCliques))
 			}
 
-			if !quasiCliquesAreEqual(quasiCliques, c.expectedQC) {
+			if len(c.expectedQC) > 0 && !quasiCliquesAreEqual(quasiCliques, c.expectedQC) {
 				t.Errorf("[%d] quasi-cliqes mismatch.", i)
 			}
 		})
@@ -62,34 +69,36 @@ func TestDDA(t *testing.T) {
 }
 
 func BenchmarkDDA_glpk(b *testing.B) {
-	gammas := []float64{1.0, 0.9, 0.8, 0.6, 0.5}
+	flag.Parse()
+	fmt.Printf("Find all solutions: %v\n", allSolutions)
+
+	gammas := []float64{1.0, 0.9, 0.8, 0.65}
+
+	solveMode := OneSolution
+	if allSolutions {
+		solveMode = AllSolutions
+	}
 
 	cases := []struct {
-		name      string
-		solveMode SolveMode
-		getGraph  graphGetter
+		name     string
+		getGraph graphGetter
 	}{
 		// Small graph: 6 nodes
-		{"small", OneSolution, getGraphFromFile(path.Join("..", "testdata", "small.dot"))},
-		{"small", AllSolutions, getGraphFromFile(path.Join("..", "testdata", "small.dot"))},
+		// {"small", getGraphFromFile(path.Join("..", "testdata", "small.dot"))},
 		// Social network
-		{"social_210", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "social.dot"))},
-		{"social_210", AllSolutions, getGraphFromFile(filepath.Join("..", "testdata", "social.dot"))},
+		// {"social_210", getGraphFromFile(filepath.Join("..", "testdata", "social.dot"))},
 		// GNP 50 nodes
-		{"gnp_50_p_0.1", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "gnp_50_0.1.dot"))},
-		{"gnp_50_p_0.1", AllSolutions, getGraphFromFile(filepath.Join("..", "testdata", "gnp_50_0.1.dot"))},
-		{"gnp_50_p_0.3", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "gnp_50_0.3.dot"))},
-		{"gnp_50_p_0.5", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "gnp_50_0.5.dot"))},
+		// {"gnp_50_p_0.1", getGraphFromFile(filepath.Join("..", "testdata", "gnp_50_0.1.dot"))},
+		// {"gnp_50_p_0.3", getGraphFromFile(filepath.Join("..", "testdata", "gnp_50_0.3.dot"))},
 		// GNP 100 nodes
-		{"gnp_100_p_0.1", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "gnp_100_0.1.dot"))},
-		{"gnp_100_p_0.3", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "gnp_100_0.3.dot"))},
-		// GNP 1000 nodes
-		{"gnp_1000_p_0.1", OneSolution, getGraphFromFile(filepath.Join("..", "testdata", "gnp_1000_0.1.dot"))},
+		// {"gnp_100_p_0.1", getGraphFromFile(filepath.Join("..", "testdata", "gnp_100_0.1.dot"))},
+		// GNP 500 nodes
+		{"gnp_500_p_0.01", getGraphFromFile(filepath.Join("..", "testdata", "gnp_500_0.01.dot"))},
 	}
 
 	for i, c := range cases {
 		for _, gamma := range gammas {
-			b.Run(fmt.Sprintf("%s_y_%g_all_solutions_%v", c.name, gamma, c.solveMode), func(b *testing.B) {
+			b.Run(fmt.Sprintf("%s_y_%g", c.name, gamma), func(b *testing.B) {
 				g, err := c.getGraph()
 				if err != nil {
 					b.Fatalf("[%d] Failed to get graph: %s", i, err)
@@ -102,7 +111,7 @@ func BenchmarkDDA_glpk(b *testing.B) {
 						_, _, err := DDA(Opts{
 							InputGraph: g,
 							Gamma:      gamma,
-							SolveMode:  c.solveMode,
+							SolveMode:  solveMode,
 							YQCKSolver: glpk.Solve,
 						})
 						if err != nil {
